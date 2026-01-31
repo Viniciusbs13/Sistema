@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Client, ClientAsset, User, AssetType } from '../types';
+import { Client, ClientAsset, User, AssetType, ClientHealth } from '../types';
 import { 
   Plus, Folder, Trash2, FileText, CheckSquare, ChevronLeft, ChevronRight, 
   X, UserPlus, Table as TableIcon, Columns, Rows, AlertTriangle, 
-  CloudCheck, CloudUpload, MoreHorizontal, ArrowDown, ArrowUp, ArrowLeft, ArrowRight
+  CloudCheck, CloudUpload, MoreHorizontal, ArrowDown, ArrowUp, ArrowLeft, ArrowRight,
+  ShieldAlert, Activity
 } from 'lucide-react';
 
 interface ClientPanelProps {
@@ -35,6 +36,7 @@ const ClientPanel: React.FC<ClientPanelProps> = ({ clients, setClients, assets, 
       name: newClientName,
       managerId: newClientManager,
       status: 'active',
+      health: 'good',
       createdAt: Date.now()
     };
     setClients(prev => [...prev, client]);
@@ -42,12 +44,15 @@ const ClientPanel: React.FC<ClientPanelProps> = ({ clients, setClients, assets, 
     setIsAddingClient(false);
   };
 
+  const updateClientHealth = (clientId: string, health: ClientHealth) => {
+    setClients(prev => prev.map(c => c.id === clientId ? { ...c, health } : c));
+  };
+
   const handleAddAsset = (type: AssetType) => {
     if (!selectedClientId) return;
     
     let initialData: any;
     if (type === 'spreadsheet') {
-      // 5x5 grid inicial
       initialData = Array(6).fill(0).map(() => Array(6).fill(""));
       initialData[0] = ["Cabeçalho 1", "Cabeçalho 2", "Status", "Valor", "Notas", ""];
     } else if (type === 'checklist' ) {
@@ -78,6 +83,24 @@ const ClientPanel: React.FC<ClientPanelProps> = ({ clients, setClients, assets, 
     if (editingAssetId === id) setEditingAssetId(null);
   };
 
+  const getHealthColor = (health?: ClientHealth) => {
+    switch (health) {
+      case 'good': return 'bg-emerald-500';
+      case 'average': return 'bg-yellow-500';
+      case 'bad': return 'bg-red-500';
+      default: return 'bg-zinc-700';
+    }
+  };
+
+  const getHealthLabel = (health?: ClientHealth) => {
+    switch (health) {
+      case 'good': return 'Estável / Bom Resultado';
+      case 'average': return 'Alerta / Resultado Médio';
+      case 'bad': return 'Instável / Crítico';
+      default: return 'Sem Status';
+    }
+  };
+
   if (editingAsset) {
     const isManager = selectedClient?.managerId === currentUser.id;
     return (
@@ -90,29 +113,75 @@ const ClientPanel: React.FC<ClientPanelProps> = ({ clients, setClients, assets, 
     );
   }
 
-  if (selectedClientId) {
+  if (selectedClientId && selectedClient) {
+    const isManager = selectedClient.managerId === currentUser.id;
     return (
       <div className="space-y-6 pb-20 animate-in fade-in slide-in-from-right-4">
-        <div className="flex items-center justify-between">
-          <button onClick={() => setSelectedClientId(null)} className="flex items-center gap-2 text-zinc-500 hover:text-white transition-colors">
-            <ChevronLeft size={20} /> Painel CRM
-          </button>
-          <div className="text-center">
-            <h2 className="text-2xl font-black text-white">{selectedClient?.name}</h2>
-            <p className="text-[10px] text-teal-500 font-bold uppercase tracking-widest">Base de Dados do Cliente</p>
-          </div>
-          {(isAdmin || selectedClient?.managerId === currentUser.id) && (
-            <div className="relative group">
-              <button className="bg-teal-600 text-black px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-teal-500/20">
-                <Plus size={18} /> Criar Novo
-              </button>
-              <div className="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 overflow-hidden">
-                <button onClick={() => handleAddAsset('spreadsheet')} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 text-sm border-b border-zinc-800"><TableIcon size={16} className="text-green-500" /> Planilha de Dados</button>
-                <button onClick={() => handleAddAsset('text')} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 text-sm border-b border-zinc-800"><FileText size={16} className="text-purple-500" /> Notas / Wiki</button>
-                <button onClick={() => handleAddAsset('checklist')} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 text-sm"><CheckSquare size={16} className="text-blue-500" /> Checklist Operacional</button>
-              </div>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <button onClick={() => setSelectedClientId(null)} className="p-2 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-colors">
+              <ChevronLeft size={20} />
+            </button>
+            <div>
+              <h2 className="text-2xl font-black text-white flex items-center gap-3">
+                {selectedClient.name}
+                <div className={`w-3 h-3 rounded-full ${getHealthColor(selectedClient.health)} shadow-lg`} />
+              </h2>
+              <p className="text-[10px] text-teal-500 font-bold uppercase tracking-widest">Base de Dados & Status de Saúde</p>
             </div>
-          )}
+          </div>
+
+          <div className="flex items-center gap-3">
+             {/* Health Flag Selector */}
+             {(isAdmin || isManager) && (
+               <div className="bg-zinc-900/50 border border-zinc-800 p-1.5 rounded-2xl flex items-center gap-1">
+                  {(['good', 'average', 'bad'] as ClientHealth[]).map(h => (
+                    <button 
+                      key={h}
+                      onClick={() => updateClientHealth(selectedClient.id, h)}
+                      className={`
+                        w-8 h-8 rounded-xl flex items-center justify-center transition-all
+                        ${selectedClient.health === h ? getHealthColor(h) + ' text-black' : 'hover:bg-zinc-800 text-zinc-600'}
+                      `}
+                      title={getHealthLabel(h)}
+                    >
+                      <Activity size={16} />
+                    </button>
+                  ))}
+               </div>
+             )}
+             
+             {(isAdmin || isManager) && (
+              <div className="relative group">
+                <button className="bg-teal-600 text-black px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-teal-500/20">
+                  <Plus size={18} /> Novo Arquivo
+                </button>
+                <div className="absolute right-0 mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50 overflow-hidden">
+                  <button onClick={() => handleAddAsset('spreadsheet')} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 text-sm border-b border-zinc-800"><TableIcon size={16} className="text-green-500" /> Planilha de Dados</button>
+                  <button onClick={() => handleAddAsset('text')} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 text-sm border-b border-zinc-800"><FileText size={16} className="text-purple-500" /> Notas / Wiki</button>
+                  <button onClick={() => handleAddAsset('checklist')} className="w-full text-left px-4 py-3 hover:bg-zinc-800 flex items-center gap-3 text-sm"><CheckSquare size={16} className="text-blue-500" /> Checklist Operacional</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Health Summary Banner */}
+        <div className={`p-4 rounded-2xl border flex items-center justify-between ${
+          selectedClient.health === 'good' ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-500' :
+          selectedClient.health === 'average' ? 'bg-yellow-500/5 border-yellow-500/20 text-yellow-500' :
+          'bg-red-500/5 border-red-500/20 text-red-500'
+        }`}>
+          <div className="flex items-center gap-3">
+             <div className={`p-2 rounded-xl bg-current bg-opacity-10`}>
+                <Activity size={20} />
+             </div>
+             <div>
+                <p className="text-[10px] font-black uppercase tracking-tighter opacity-70">Status Atual de Entrega</p>
+                <p className="text-sm font-bold">{getHealthLabel(selectedClient.health)}</p>
+             </div>
+          </div>
+          <p className="text-[10px] font-black uppercase opacity-50 hidden md:block">Monitoramento em tempo real</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -155,7 +224,7 @@ const ClientPanel: React.FC<ClientPanelProps> = ({ clients, setClients, assets, 
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Database CRM</h2>
-          <p className="text-sm text-zinc-500">Gestão de arquivos e planejamento com sincronização automática.</p>
+          <p className="text-sm text-zinc-500">Gestão de arquivos e monitoramento de saúde do cliente.</p>
         </div>
         {isAdmin && (
           <button onClick={() => setIsAddingClient(true)} className="bg-teal-600 text-black px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-teal-500/10">
@@ -199,17 +268,31 @@ const ClientPanel: React.FC<ClientPanelProps> = ({ clients, setClients, assets, 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {filteredClients.map(client => (
           <div key={client.id} onClick={() => setSelectedClientId(client.id)} className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl hover:border-teal-500 transition-all cursor-pointer group relative overflow-hidden shadow-xl">
-            <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-opacity">
-              <Folder size={80} />
+            {/* Health Indicator Flag */}
+            <div className={`absolute top-0 right-0 w-16 h-16 transition-transform group-hover:scale-110`}>
+                <div className={`absolute top-0 right-0 w-full h-full ${getHealthColor(client.health)} opacity-10`} style={{ clipPath: 'polygon(100% 0, 0 0, 100% 100%)' }} />
+                <div className={`absolute top-4 right-4 w-2 h-2 rounded-full ${getHealthColor(client.health)} shadow-[0_0_10px_rgba(0,0,0,0.5)]`} />
             </div>
+            
             <div className="relative z-10">
               <div className="w-12 h-12 bg-teal-500/10 text-teal-500 rounded-2xl flex items-center justify-center mb-4">
                 <Folder size={24} />
               </div>
               <h3 className="text-lg font-bold text-white mb-1">{client.name}</h3>
-              <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-4 flex items-center gap-1">
+              <p className="text-[10px] text-zinc-500 uppercase font-bold tracking-widest mb-2 flex items-center gap-1">
                 Responsável: <span className="text-zinc-300">{users.find(u => u.id === client.managerId)?.name || 'N/A'}</span>
               </p>
+              
+              <div className="flex items-center gap-2 mb-4">
+                 <div className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${
+                   client.health === 'good' ? 'bg-emerald-500/20 text-emerald-400' :
+                   client.health === 'average' ? 'bg-yellow-500/20 text-yellow-400' :
+                   'bg-red-500/20 text-red-400'
+                 }`}>
+                   {client.health === 'good' ? 'Estável' : client.health === 'average' ? 'Atenção' : 'Crítico'}
+                 </div>
+              </div>
+
               <div className="flex items-center justify-between mt-auto pt-4 border-t border-zinc-800/50">
                 <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-tighter">{assets.filter(a => a.clientId === client.id).length} Base(s) de Dados</span>
                 <ChevronRight size={16} className="text-zinc-700 group-hover:text-teal-500 transition-colors" />
@@ -232,10 +315,8 @@ const AssetEditor: React.FC<{
   const [data, setData] = useState(asset.data);
   const [title, setTitle] = useState(asset.title);
   const [isSyncing, setIsSyncing] = useState(false);
-  // Fix: Replaced NodeJS.Timeout with any to resolve "Cannot find namespace 'NodeJS'" error in frontend environments
   const syncTimer = useRef<any>(null);
 
-  // Auto-save logic
   useEffect(() => {
     if (syncTimer.current) clearTimeout(syncTimer.current);
     
@@ -341,7 +422,6 @@ const AssetEditor: React.FC<{
       <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden flex flex-col shadow-2xl">
         {asset.type === 'spreadsheet' && (
           <div className="flex flex-col h-full">
-            {/* Toolbar Spreadsheet */}
             {!isReadOnly && (
               <div className="p-3 border-b border-zinc-800 bg-zinc-950/30 flex items-center gap-4">
                 <div className="flex items-center gap-1">
@@ -357,12 +437,10 @@ const AssetEditor: React.FC<{
               </div>
             )}
 
-            {/* Grid Excel Style */}
             <div className="flex-1 overflow-auto relative custom-scrollbar bg-zinc-950/10">
               <table className="border-collapse w-full table-fixed min-w-max">
                 <thead>
                   <tr className="sticky top-0 z-20">
-                    {/* Index Row Header */}
                     <th className="w-12 bg-zinc-950 border border-zinc-800 p-0 text-[10px] text-zinc-600 font-black uppercase sticky left-0 z-30">#</th>
                     {data[0].map((_: any, i: number) => (
                       <th key={i} className="w-48 bg-zinc-950 border border-zinc-800 p-0 relative group">
@@ -384,7 +462,6 @@ const AssetEditor: React.FC<{
                 <tbody>
                   {data.map((row: string[], rIdx: number) => (
                     <tr key={rIdx} className="group/row">
-                      {/* Row Header Index */}
                       <th className="bg-zinc-950 border border-zinc-800 p-0 text-[10px] text-zinc-600 font-black sticky left-0 z-10 flex items-center justify-center h-10 w-12 group-hover/row:bg-zinc-900 transition-colors">
                         <span className="group-hover/row:hidden">{rIdx + 1}</span>
                         {!isReadOnly && data.length > 1 && (
@@ -498,7 +575,6 @@ const AssetEditor: React.FC<{
   );
 };
 
-// Icons help
 const CheckCircleIcon: React.FC<{ size: number }> = ({ size }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
 );

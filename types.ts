@@ -25,11 +25,14 @@ export interface Task {
   completedAt?: number;
 }
 
+export type ClientHealth = 'good' | 'average' | 'bad';
+
 export interface Client {
   id: string;
   name: string;
   managerId: string; // User ID
   status: 'active' | 'paused';
+  health?: ClientHealth; // Flag de status: verde, amarelo, vermelho
   createdAt: number;
 }
 

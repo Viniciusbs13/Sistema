@@ -24,26 +24,35 @@ const App: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
   const [clientAssets, setClientAssets] = useState<ClientAsset[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // Persistence
+  // Persistence with Error Handling
   useEffect(() => {
-    const v = 'v7';
-    const savedTasks = localStorage.getItem(`omega-tasks-${v}`);
-    const savedNotes = localStorage.getItem(`omega-notes-${v}`);
-    const savedChrono = localStorage.getItem(`omega-chrono-${v}`);
-    const savedUsers = localStorage.getItem(`omega-users-${v}`);
-    const savedClients = localStorage.getItem(`omega-clients-${v}`);
-    const savedAssets = localStorage.getItem(`omega-assets-${v}`);
-    
-    if (savedTasks) setTasks(JSON.parse(savedTasks));
-    if (savedNotes) setNotes(JSON.parse(savedNotes));
-    if (savedChrono) setChronograms(JSON.parse(savedChrono));
-    if (savedUsers) setUsers(JSON.parse(savedUsers));
-    if (savedClients) setClients(JSON.parse(savedClients));
-    if (savedAssets) setClientAssets(JSON.parse(savedAssets));
+    try {
+      const v = 'v7';
+      const savedTasks = localStorage.getItem(`omega-tasks-${v}`);
+      const savedNotes = localStorage.getItem(`omega-notes-${v}`);
+      const savedChrono = localStorage.getItem(`omega-chrono-${v}`);
+      const savedUsers = localStorage.getItem(`omega-users-${v}`);
+      const savedClients = localStorage.getItem(`omega-clients-${v}`);
+      const savedAssets = localStorage.getItem(`omega-assets-${v}`);
+      
+      if (savedTasks) setTasks(JSON.parse(savedTasks));
+      if (savedNotes) setNotes(JSON.parse(savedNotes));
+      if (savedChrono) setChronograms(JSON.parse(savedChrono));
+      if (savedUsers) setUsers(JSON.parse(savedUsers));
+      if (savedClients) setClients(JSON.parse(savedClients));
+      if (savedAssets) setClientAssets(JSON.parse(savedAssets));
+    } catch (error) {
+      console.error("Erro ao carregar banco de dados local:", error);
+      // Se houver erro de parse, limpamos para evitar loop de crash
+    } finally {
+      setIsInitialized(true);
+    }
   }, []);
 
   useEffect(() => {
+    if (!isInitialized) return;
     const v = 'v7';
     localStorage.setItem(`omega-tasks-${v}`, JSON.stringify(tasks));
     localStorage.setItem(`omega-notes-${v}`, JSON.stringify(notes));
@@ -51,7 +60,7 @@ const App: React.FC = () => {
     localStorage.setItem(`omega-users-${v}`, JSON.stringify(users));
     localStorage.setItem(`omega-clients-${v}`, JSON.stringify(clients));
     localStorage.setItem(`omega-assets-${v}`, JSON.stringify(clientAssets));
-  }, [tasks, notes, chronograms, users, clients, clientAssets]);
+  }, [tasks, notes, chronograms, users, clients, clientAssets, isInitialized]);
 
   // Invitation logic
   useEffect(() => {
@@ -98,6 +107,8 @@ const App: React.FC = () => {
     setChronograms(prev => prev.map(c => c.id === chrono.id ? { ...c, lastReset: Date.now() } : c));
   };
 
+  if (!isInitialized) return <div className="h-screen w-screen bg-black flex items-center justify-center text-teal-500 font-bold">Carregando Workspace...</div>;
+
   return (
     <div className="flex h-screen bg-[#0a0a0a] text-gray-200 overflow-hidden font-sans">
       <Sidebar 
@@ -119,12 +130,12 @@ const App: React.FC = () => {
               </button>
             )}
             <div>
-              <h1 className="text-2xl font-bold capitalize flex items-center gap-2">
+              <h1 className="text-2xl font-black capitalize flex items-center gap-2 text-white">
                 {view === 'clients' && <Briefcase className="text-teal-500" />}
                 {view !== 'clients' && <BarChart3 className="text-teal-500" />}
                 {view}
               </h1>
-              <p className="text-xs text-zinc-500 font-medium">Sessão: {currentUser.name}</p>
+              <p className="text-xs text-zinc-500 font-bold uppercase tracking-widest">Acesso: {currentUser.name}</p>
             </div>
           </div>
         </header>

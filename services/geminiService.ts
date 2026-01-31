@@ -1,17 +1,29 @@
 
-// Fix: Added Type import and implemented responseSchema for structured JSON output
 import { GoogleGenAI, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Proteção para evitar crash se process.env não existir (comum em builds estáticos)
+const getApiKey = () => {
+  try {
+    return process.env.API_KEY || "";
+  } catch (e) {
+    return "";
+  }
+};
+
+const apiKey = getApiKey();
+const ai = apiKey ? new GoogleGenAI({ apiKey }) : null;
 
 export const generateWeeklySubtasks = async (goal: string) => {
+  if (!ai) {
+    console.warn("Gemini AI não inicializado: Falta API_KEY.");
+    return null;
+  }
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Transform this goal into a weekly plan (Monday to Friday). Return a JSON object where keys are the days of the week and values are arrays of 2-3 specific subtasks. Goal: "${goal}"`,
       config: {
         responseMimeType: "application/json",
-        // Recommended method for JSON: providing a responseSchema
         responseSchema: {
           type: Type.OBJECT,
           properties: {
@@ -25,7 +37,6 @@ export const generateWeeklySubtasks = async (goal: string) => {
         }
       }
     });
-    // Accessing .text as a property as per guidelines
     const text = response.text;
     return text ? JSON.parse(text) : null;
   } catch (error) {
@@ -35,12 +46,12 @@ export const generateWeeklySubtasks = async (goal: string) => {
 };
 
 export const summarizeNotes = async (content: string) => {
+  if (!ai) return "IA não configurada. Adicione a API_KEY nas variáveis de ambiente.";
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Summarize this note in 3 bullet points: "${content}"`,
     });
-    // Accessing .text as a property as per guidelines
     return response.text || "Could not generate summary.";
   } catch (error) {
     console.error("Gemini Error:", error);
